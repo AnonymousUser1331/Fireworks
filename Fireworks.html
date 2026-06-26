@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Fireworks Display</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 14px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Click anywhere to launch a firework!</div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Resize canvas to fit window
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Configuration
+        const FOCAL_LENGTH = 400; // Controls the 3D perspective depth
+        const GRAVITY = 0.05;
+        let fireworks = [];
+        let particles = [];
+        let angleY = 0.003; // Slow automatic camera rotation around Y-axis
+
+        // Helper to get random value in a range
+        const random = (min, max) => Math.random() * (max - min) + min;
+
+        // --- 3D Rocket Class ---
+        class Rocket {
+            constructor(targetX, targetY) {
+                // Start from bottom center
+                this.x = 0; 
+                this.y = canvas.height / 2; 
+                this.z = random(-100, 100);
+
+                // Target coordinates in 3D-ish space
+                this.targetX = targetX - canvas.width / 2;
+                this.targetY = targetY - canvas.height / 2;
+                this.targetZ = random(-50, 50);
+
+                // Calculate velocities
+                const tx = this.targetX - this.x;
+                const ty = this.targetY - this.y;
+                const tz = this.targetZ - this.z;
+                const steps = random(50, 80);
+
+                this.vx = tx / steps;
+                this.vy = ty / steps;
+                this.vz = tz / steps;
+
+                this.hue = Math.floor(random(0, 360));
+                this.life = steps;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.z += this.vz;
+                this.life--;
+
+                if (this.life <= 0) {
+                    explode(this.x, this.y, this.z, this.hue);
+                    return false;
+                }
+                return true;
+            }
+
+            draw() {
+                // 3D Rotation around Y axis
+                let rX = this.x * Math.cos(angleY) - this.z * Math.sin(angleY);
+                let rZ = this.z * Math.cos(angleY) + this.x * Math.sin(angleY);
+
+                // 3D to 2D Projection
+                const scale = FOCAL_LENGTH / (FOCAL_LENGTH + rZ);
+                const screenX = rX * scale + canvas.width / 2;
+                const screenY = this.y * scale + canvas.height / 2;
+
+                if (scale > 0) {
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, 3 * scale, 0, Math.PI * 2);
+                    ctx.fillStyle = `hsl(${this.hue}, 100%, 70%)`;
+                    ctx.fill();
+                }
+            }
+        }
+
+        // --- 3D Particle Class ---
+        class Particle {
+            constructor(x, y, z, hue) {
+                this.x = x;
+                this.y = y;
+                this.z = z;
+                
+                // Spherical distribution for a perfect 3D sphere explosion
+                const theta = random(0, Math.PI * 2);
+                const phi = Math.acos(random(-1, 1));
+                const speed = random(2, 5);
+
+                this.vx = speed * Math.sin(phi) * Math.cos(theta);
+                this.vy = speed * Math.sin(phi) * Math.sin(theta);
+                this.vz = speed * Math.cos(phi);
+
+                this.hue = hue + random(-20, 20);
+                this.alpha = 1;
+                this.decay = random(0.01, 0.02);
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.z += this.vz;
+                this.vy += GRAVITY; // Apply gravity
+                this.alpha -= this.decay;
+                return this.alpha > 0;
+            }
+
+            draw() {
+                // Rotate camera slightly over time for a dynamic 3D look
+                let rX = this.x * Math.cos(angleY) - this.z * Math.sin(angleY);
+                let rZ = this.z * Math.cos(angleY) + this.x * Math.sin(angleY);
+
+                // 3D Projection formula
+                const scale = FOCAL_LENGTH / (FOCAL_LENGTH + rZ);
+                const screenX = rX * scale + canvas.width / 2;
+                const screenY = this.y * scale + canvas.height / 2;
+
+                if (scale > 0 && this.alpha > 0) {
+                    ctx.beginPath();
+                    // Particle size scales with depth (closer = bigger)
+                    ctx.arc(screenX, screenY, 2 * scale, 0, Math.PI * 2);
+                    ctx.fillStyle = `hsla(${this.hue}, 100%, 60%, ${this.alpha})`;
+                    ctx.fill();
+                }
+            }
+        }
+
+        // Trigger explosion of particles
+        function explode(x, y, z, hue) {
+            const count = 120; // Number of particles per explosion
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, z, hue));
+            }
+        }
+
+        // --- Main Animation Loop ---
+        function animate() {
+            // Create a trail effect by blending a dark background
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Auto-launch fireworks randomly
+            if (Math.random() < 0.03 && fireworks.length < 5) {
+                fireworks.push(new Rocket(random(100, canvas.width - 100), random(100, canvas.height / 1.5)));
+            }
+
+            // Update and draw rockets
+            fireworks = fireworks.filter(fw => {
+                const alive = fw.update();
+                if (alive) fw.draw();
+                return alive;
+            });
+
+            // Update and draw particles
+            particles = particles.filter(p => {
+                const alive = p.update();
+                if (alive) p.draw();
+                return alive;
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        // Interactive mouse/touch launches
+        window.addEventListener('click', (e) => {
+            fireworks.push(new Rocket(e.clientX, e.clientY));
+        });
+
+        // Start animation
+        animate();
+    </script>
+</body>
+</html>

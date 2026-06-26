@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Festive Fireworks Display</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #overlay-ui {
+            position: absolute;
+            top: 15%;
+            width: 100%;
+            text-align: center;
+            color: #fff;
+            pointer-events: none;
+            user-select: none;
+        }
+        #overlay-ui h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            letter-spacing: 4px;
+            color: #ffdf00;
+            text-shadow: 0 0 10px rgba(255, 223, 0, 0.6), 0 0 20px rgba(255, 69, 0, 0.4);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+        #overlay-ui p {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.4);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="overlay-ui">
+        <h1>HAPPY DIWALI</h1>
+        <p>Click anywhere to launch custom sparks</p>
+    </div>
+
+    <canvas id="fireworksCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('fireworksCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        let rockets = [];
+        let particles = [];
+
+        // Dynamic Configuration
+        const GRAVITY = 0.06;
+        const AIR_RESISTANCE = 0.98; // Smooth drag deceleration
+
+        // Helper functions
+        const randomRange = (min, max) => Math.random() * (max - min) + min;
+        const getRandomColor = () => `hsl(${Math.floor(randomRange(0, 360))}, 100%, 65%)`;
+
+        // --- Rocket (Launcher Trail) Class ---
+        class Rocket {
+            constructor(startX, startY, targetX, targetY) {
+                this.x = startX;
+                this.y = startY;
+                this.targetX = targetX;
+                this.targetY = targetY;
+                
+                // Track historical path segments to create a crisp rocket tail stream
+                this.history = [];
+                this.historyLimit = 15;
+
+                // Physics trajectories
+                const angle = Math.atan2(targetY - startY, targetX - startX);
+                const distance = Math.hypot(targetX - startX, targetY - startY);
+                this.speed = randomRange(12, 17);
+                
+                this.vx = Math.cos(angle) * this.speed;
+                this.vy = Math.sin(angle) * this.speed;
+
+                this.hue = Math.floor(randomRange(0, 360));
+                this.distanceToTarget = distance;
+                this.distanceTraveled = 0;
+            }
+
+            update() {
+                // Keep trail history up-to-date
+                this.history.push({ x: this.x, y: this.y });
+                if (this.history.length > this.historyLimit) {
+                    this.history.shift();
+                }
+
+                // Increment positions
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Measure straight vector distance traveled
+                this.distanceTraveled = Math.hypot(this.x - this.history[0].x, this.y - this.history[0].y);
+
+                // Check if target is met or overshot
+                if (this.y <= this.targetY || this.vy > 0) {
+                    explodeShell(this.targetX, this.targetY, this.hue);
+                    return false; // Terminal death state
+                }
+                return true;
+            }
+
+            draw() {
+                if (this.history.length < 2) return;
+
+                ctx.beginPath();
+                ctx.moveTo(this.history[0].x, this.history[0].y);
+                for (let i = 1; i < this.history.length; i++) {
+                    ctx.lineTo(this.history[i].x, this.history[i].y);
+                }
+                ctx.strokeStyle = `hsl(${this.hue}, 100%, 70%)`;
+                ctx.lineWidth = 2.5;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+
+                // Spark head point
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+                ctx.fillStyle = '#fff';
+                ctx.fill();
+            }
+        }
+
+        // --- Explosion Spark Particle Class ---
+        class Particle {
+            constructor(x, y, hue) {
+                this.x = x;
+                this.y = y;
+                this.hue = hue + Math.floor(randomRange(-25, 25)); // Slight variance additions
+
+                // Spherical random dispersion mapping
+                const angle = randomRange(0, Math.PI * 2);
+                const velocityPower = randomRange(2, 7);
+                this.vx = Math.cos(angle) * velocityPower;
+                this.vy = Math.sin(angle) * velocityPower;
+
+                this.alpha = 1.0;
+                this.decay = randomRange(0.012, 0.022); // Fades dynamically over time
+                
+                this.history = [];
+                this.historyLimit = 6; // Trail duration length
+            }
+
+            update() {
+                this.history.push({ x: this.x, y: this.y });
+                if (this.history.length > this.historyLimit) {
+                    this.history.shift();
+                }
+
+                // Apply external environmental modifiers
+                this.vx *= AIR_RESISTANCE;
+                this.vy *= AIR_RESISTANCE;
+                this.vy += GRAVITY;
+
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                this.alpha -= this.decay;
+                return this.alpha > 0;
+            }
+
+            draw() {
+                if (this.history.length < 2) return;
+
+                // Draw a beautiful soft-trailing stream segment
+                ctx.beginPath();
+                ctx.moveTo(this.history[0].x, this.history[0].y);
+                for (let i = 1; i < this.history.length; i++) {
+                    ctx.lineTo(this.history[i].x, this.history[i].y);
+                }
+                ctx.strokeStyle = `hsla(${this.hue}, 100%, 60%, ${this.alpha})`;
+                ctx.lineWidth = randomRange(1.5, 2.5);
+                ctx.stroke();
+            }
+        }
+
+        function explodeShell(x, y, hue) {
+            const count = Math.floor(randomRange(80, 120));
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, hue));
+            }
+        }
+
+        // --- Engine Simulation Loop ---
+        function frame() {
+            // High-retention semi-transparent clear rect produces an authentic lens trailing glow path
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Automatic periodic backdrop launches
+            if (Math.random() < 0.04 && rockets.length < 5) {
+                const startX = randomRange(canvas.width * 0.1, canvas.width * 0.9);
+                const startY = canvas.height;
+                const targetX = randomRange(canvas.width * 0.1, canvas.width * 0.9);
+                const targetY = randomRange(canvas.height * 0.15, canvas.height * 0.5);
+                rockets.push(new Rocket(startX, startY, targetX, targetY));
+            }
+
+            // 2. Engine matrix arrays processing
+            rockets = rockets.filter(rocket => {
+                const alive = rocket.update();
+                if (alive) rocket.draw();
+                return alive;
+            });
+
+            particles = particles.filter(particle => {
+                const alive = particle.update();
+                if (alive) particle.draw();
+                return alive;
+            });
+
+            requestAnimationFrame(frame);
+        }
+
+        // Explicit user pointer engagement handler
+        window.addEventListener('pointerdown', (e) => {
+            // Launches an accurate shell right to the exact position clicked
+            const startX = canvas.width / 2 + randomRange(-100, 100);
+            const startY = canvas.height;
+            rockets.push(new Rocket(startX, startY, e.clientX, e.clientY));
+        });
+
+        // Initialize engine framework
+        frame();
+    </script>
+</body>
+</html>

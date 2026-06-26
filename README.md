@@ -19,24 +19,24 @@ This suite of projects represents a modern shift in software engineering. Instea
 
 This repository tracks the step-by-step progress of the codebase, demonstrating how the mechanics were optimized for enhanced realism and rendering efficiency.
 
-###  Phase 1: The Core Foundation (`fireworks-v1.html`)
-* **Overview:** A lightweight 3D projection sandbox built completely from scratch without external libraries.
-* **Tech Stack:** Vanilla JavaScript, HTML5 2D Canvas API.
-* **Key Implementation:** Uses a manual perspective depth scaling factor to map random spherical particle distributions on a 2D viewport:
-  $$\text{Scale} = \frac{\text{Focal Length}}{\text{Focal Length} + z}$$
+### 📦 Phase 1: The Core Foundation (`Fireworks`)
+* **Overview:** A lightweight 3D projection sandbox mapping coordinate points.
+* **Key Feature:** Establishes standard viewport perspective scaling matrices.
 
-###  Phase 2: High-Density Cosmic Galaxy Shaders (`fireworks-v2.html`)
-* **Overview:** Transitioning heavy computational operations to the GPU to handle massive particle overheads smoothly.
-* **Tech Stack:** Three.js, WebGL, Custom GLSL Vertex & Fragment Shaders.
-* **Key Implementation:** Features an analytical solution of motion with exponential fluid drag ($1 - e^{-kt}$) to accurately mimic atmospheric air resistance. Includes multi-stage *Crossette* crackle bursts and an incandescent thermal color mapping profile that shifts from a blinding white-hot core to chemical hues, ending in glowing embers.
+### ⚡ Phase 2: WebGL City Skyline & Volumetric Clouds (`Fireworks2`)
+* **Overview:** Renders a clean 3D cityscape silhouette against dense, mist-like particle clusters.
+* **Key Feature:** Utilizes WebGL contexts to calculate volumetric expansion of deep green and orange particle bursts simultaneously above the horizon line.
 
-###  Phase 3: The Interactive Ground Control Engine (`festive-engine-final.html`)
-* **Overview:** The final consolidated build, combining cosmic galaxy shell structures with an interactive ground-level firecracker deployment system.
-* **Tech Stack:** HTML5 Canvas, Magnetic Text Vector Math, Custom Rotational Vector Matrices.
+### 🎨 Phase 3: High-Performance Trail Tracers (`Fireworks3`)
+* **Overview:** A fast canvas build emphasizing crisp light paths and standard typography overlay layout.
+* **Key Feature:** Focuses on fluid alpha-wipe trails that make rockets look sharp as they streak up towards a bold festive header.
+
+### 🎛️ Phase 4: Ground Control Dashboard & Particle Constellation (`Fireworks4`)
+* **Overview:** The final interactive application featuring multi-mode functionality.
 * **Key Features:**
-  * **Magnetic Particle Constellation:** The "Happy Diwali" display is baked out of a scanned image buffer into hundreds of independent glowing nodes. The particles dynamically disperse when interacting with your cursor's proximity push-force field before easing back to their home slots.
-  * **Anar (Fountain Pot):** Simulates a high-density, vertical conical vector spray ($V_y \gg V_x$) with active gravitational decay.
-  * **Chakri (Ground Spinner):** Tracks a moving angular variable ($\theta$) to eject shimmering sparks tangentially perpendicular to the rotating radial ring boundary ($\theta + \pi/2$).
+  * **Interactive Selection Menu:** A sleek bottom menu component to seamlessly toggle between Sky Rockets, Anars, and Chakris.
+  * **Conical Anar Fountains:** Simulates realistic sparkling golden floor fountains with randomized pressure heights.
+  * **Dot-Matrix Grid Text:** The greeting text is rendered as independent glowing particle elements forming an intricate glowing constellation.
 
 ---
 

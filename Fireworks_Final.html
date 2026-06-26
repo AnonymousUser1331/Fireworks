@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Festive Lights & Firecrackers Engine</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #03050a;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        /* Interactive Control Panel at the Bottom */
+        #control-panel {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            background: rgba(255, 255, 255, 0.06);
+            padding: 10px 20px;
+            border-radius: 50px;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+        .btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            padding: 10px 24px;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+        }
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+        }
+        .btn.active {
+            background: #ffaa00;
+            color: #000;
+            box-shadow: 0 0 15px rgba(255, 170, 0, 0.4);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="control-panel">
+        <button class="btn active" onclick="setMode('sky', this)">Sky Rocket</button>
+        <button class="btn" onclick="setMode('anar', this)">Anar (Fountain)</button>
+        <button class="btn" onclick="setMode('chakri', this)">Chakri (Spinner)</button>
+    </div>
+
+    <canvas id="mainCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let currentMode = 'sky'; // sky, anar, chakri
+        let rockets = [];
+        let particles = [];
+        let textParticles = [];
+        let groundCrackers = [];
+        
+        let mouse = { x: undefined, y: undefined, radius: 60 };
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            initTextMatrix(); // Re-bake the particle text configuration on resize
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+        window.addEventListener('mouseleave', () => {
+            mouse.x = undefined;
+            mouse.y = undefined;
+        });
+
+        function setMode(mode, element) {
+            currentMode = mode;
+            document.querySelectorAll('.btn').forEach(btn => btn.classList.remove('active'));
+            element.classList.add('active');
+        }
+
+        const randomRange = (min, max) => Math.random() * (max - min) + min;
+
+        // --- MAGNETIC TEXT CONSTELLATION INFRASTRUCTURE ---
+        class TextParticle {
+            constructor(x, y, color) {
+                this.x = Math.random() * canvas.width; // Start chaotic scattered
+                this.y = Math.random() * canvas.height;
+                this.destX = x;
+                this.destY = y;
+                this.color = color;
+                this.size = randomRange(1, 2.2);
+                this.vx = 0;
+                this.vy = 0;
+                this.friction = 0.88;
+                this.ease = 0.08;
+            }
+
+            update() {
+                // Return to home position math
+                this.vx += (this.destX - this.x) * this.ease;
+                this.vy += (this.destY - this.y) * this.ease;
+
+                // Mouse interaction push field math
+                if (mouse.x !== undefined && mouse.y !== undefined) {
+                    let dx = mouse.x - this.x;
+                    let dy = mouse.y - this.y;
+                    let dist = Math.hypot(dx, dy);
+                    if (dist < mouse.radius) {
+                        let force = (mouse.radius - dist) / mouse.radius;
+                        let angle = Math.atan2(dy, dx);
+                        // Push away fiercely
+                        this.vx -= Math.cos(angle) * force * 12;
+                        this.vy -= Math.sin(angle) * force * 12;
+                    }
+                }
+
+                this.vx *= this.friction;
+                this.vy *= this.friction;
+                this.x += this.vx;
+                this.y += this.vy;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+        }
+
+        function initTextMatrix() {
+            textParticles = [];
+            // Hidden temporary canvas scanner
+            const tCanvas = document.createElement('canvas');
+            const tCtx = tCanvas.getContext('2d');
+            tCanvas.width = canvas.width;
+            tCanvas.height = canvas.height;
+
+            tCtx.fillStyle = '#fff';
+            tCtx.font = `bold ${Math.min(canvas.width * 0.08, 75)}px sans-serif`;
+            tCtx.textAlign = 'center';
+            tCtx.textBaseline = 'middle';
+            tCtx.fillText("HAPPY DIWALI", tCanvas.width / 2, tCanvas.height * 0.3);
+
+            const imgData = tCtx.getImageData(0, 0, tCanvas.width, tCanvas.height).data;
+            
+            // Scan row-by-row with strict step spacing to avoid memory leaks
+            const step = Math.min(canvas.width, canvas.height) > 600 ? 4 : 3;
+            for (let y = 0; y < tCanvas.height; y += step) {
+                for (let x = 0; x < tCanvas.width; x += step) {
+                    const index = (y * tCanvas.width + x) * 4;
+                    if (imgData[index + 3] > 128) { // If pixel is opaque
+                        // Warm golden multi-tonal flame spectrum gradient colors
+                        const hue = randomRange(35, 52); 
+                        const color = `hsl(${hue}, 100%, ${randomRange(55, 75)}%)`;
+                        textParticles.push(new TextParticle(x, y, color));
+                    }
+                }
+            }
+        }
+
+        // --- SKY ROCKET PHYSICS ENGINE ---
+        class Rocket {
+            constructor(startX, startY, targetX, targetY) {
+                this.x = startX;
+                this.y = startY;
+                this.targetY = targetY;
+                this.targetX = targetX;
+                this.history = [];
+                
+                const angle = Math.atan2(targetY - startY, targetX - startX);
+                const speed = randomRange(13, 16);
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.hue = Math.floor(randomRange(0, 360));
+            }
+
+            update() {
+                this.history.push({x: this.x, y: this.y});
+                if (this.history.length > 12) this.history.shift();
+
+                this.x += this.vx;
+                this.y += this.vy;
+
+                if (this.y <= this.targetY || this.vy > 0) {
+                    explodeShell(this.targetX, this.targetY, this.hue);
+                    return false;
+                }
+                return true;
+            }
+
+            draw() {
+                if(this.history.length < 2) return;
+                ctx.beginPath();
+                ctx.moveTo(this.history[0].x, this.history[0].y);
+                for(let i=1; i<this.history.length; i++) ctx.lineTo(this.history[i].x, this.history[i].y);
+                ctx.strokeStyle = `hsl(${this.hue}, 100%, 60%)`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
+
+        // --- STANDARD FIREWORK SPARK ---
+        class Spark {
+            constructor(x, y, hue, speedPower = null, decayRate = null) {
+                this.x = x;
+                this.y = y;
+                this.hue = hue + Math.floor(randomRange(-20, 20));
+                
+                const angle = randomRange(0, Math.PI * 2);
+                const speed = speedPower || randomRange(2, 6.5);
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                
+                this.alpha = 1;
+                this.decay = decayRate || randomRange(0.012, 0.022);
+                this.history = [];
+                this.historyLimit = 5;
+            }
+
+            update() {
+                this.history.push({x: this.x, y: this.y});
+                if(this.history.length > this.historyLimit) this.history.shift();
+
+                this.vx *= 0.98;
+                this.vy *= 0.98;
+                this.vy += 0.06; // Gravity tracking
+                this.x += this.vx;
+                this.y += this.vy;
+                this.alpha -= this.decay;
+                return this.alpha > 0;
+            }
+
+            draw() {
+                if(this.history.length < 2) return;
+                ctx.beginPath();
+                ctx.moveTo(this.history[0].x, this.history[0].y);
+                for(let i=1; i<this.history.length; i++) ctx.lineTo(this.history[i].x, this.history[i].y);
+                ctx.strokeStyle = `hsla(${this.hue}, 100%, 65%, ${this.alpha})`;
+                ctx.lineWidth = 1.8;
+                ctx.stroke();
+            }
+        }
+
+        function explodeShell(x, y, hue) {
+            const count = Math.floor(randomRange(70, 110));
+            for (let i = 0; i < count; i++) {
+                particles.push(new Spark(x, y, hue));
+            }
+        }
+
+        // --- ANAR (FOUNTAIN) FIRECRACKER CLASS ---
+        class AnarCracker {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.age = 0;
+                this.duration = 180; // Total lifecycles (~3 seconds)
+            }
+
+            update() {
+                this.age++;
+                // Volley spray sparks dynamically outwards at random intervals
+                const density = 4;
+                for(let i=0; i<density; i++) {
+                    const sparkHue = randomRange(30, 48); // Golden sparks
+                    const anarSpark = new Spark(this.x, this.y, sparkHue, randomRange(4, 9.5), randomRange(0.02, 0.04));
+                    // Force velocity vector vectors upwards inside a tight conical path orientation
+                    anarSpark.vx = randomRange(-2.2, 2.2);
+                    anarSpark.vy = randomRange(-7, -13); 
+                    particles.push(anarSpark);
+                }
+                return this.age < this.duration;
+            }
+
+            draw() {
+                // Draw a simple terracotta mud-pot container shell shape on floor
+                ctx.beginPath();
+                ctx.moveTo(this.x - 12, this.y);
+                ctx.lineTo(this.x + 12, this.y);
+                ctx.lineTo(this.x + 4, this.y - 15);
+                ctx.lineTo(this.x - 4, this.y - 15);
+                ctx.closePath();
+                ctx.fillStyle = '#8B4513';
+                ctx.fill();
+                
+                // Active boiling fusion wick glow core point
+                ctx.beginPath();
+                ctx.arc(this.x, this.y - 15, 5 + Math.sin(this.age) * 2, 0, Math.PI * 2);
+                ctx.fillStyle = '#fff';
+                ctx.fill();
+            }
+        }
+
+        // --- CHAKRI (GROUND SPINNER) FIRECRACKER CLASS ---
+        class ChakriCracker {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.age = 0;
+                this.duration = 240; // Runs slightly longer (~4 seconds)
+                this.angle = 0;
+                this.spinSpeed = 0.05;
+                this.radius = 16;
+            }
+
+            update() {
+                this.age++;
+                // Ramp spin speed up and then gradually down
+                if(this.age < 40) this.spinSpeed += 0.01;
+                else if (this.age > 180) this.spinSpeed *= 0.96;
+
+                this.angle += this.spinSpeed;
+
+                // Fire ring tangential exit points calculations
+                const exhaustStreams = 3; 
+                for(let i=0; i<exhaustStreams; i++) {
+                    const currentAngle = this.angle + (i * (Math.PI * 2 / exhaustStreams));
+                    // Ring edges coordinates
+                    const emitX = this.x + Math.cos(currentAngle) * this.radius;
+                    const emitY = this.y + Math.sin(currentAngle) * this.radius;
+
+                    const hueColor = (this.age % 2 === 0) ? 180 : 30; // Shifting Teal and Golden loop tracks
+                    const chakriSpark = new Spark(emitX, emitY, hueColor, randomRange(2, 5), randomRange(0.025, 0.045));
+                    
+                    // Velocities pushed outwards tangentially perpendicular to radius
+                    chakriSpark.vx = Math.cos(currentAngle + Math.PI/2) * randomRange(5, 9);
+                    chakriSpark.vy = Math.sin(currentAngle + Math.PI/2) * randomRange(5, 9);
+                    // Negate gravity slightly for ground friction trail matching
+                    chakriSpark.vy *= 0.1; 
+
+                    particles.push(chakriSpark);
+                }
+
+                return this.age < this.duration;
+            }
+
+            draw() {
+                // Drawing rotating flat circular disc rings
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+
+                // Distinct spiral graphic bands on container surface
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.quadraticCurveTo(5, -5, 12, -2);
+                ctx.strokeStyle = '#ff3300';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        }
+
+        // --- CORE ANIMATION ENGINE TICK ---
+        function step() {
+            // Semi-transparent overlay mask produces high quality lens persistence trails
+            ctx.fillStyle = 'rgba(3, 5, 10, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Process Constellation Text Matrices
+            textParticles.forEach(tp => {
+                tp.update();
+                tp.draw();
+            });
+
+            // 2. Automate periodic secondary background sky rocket events
+            if (Math.random() < 0.02 && rockets.length < 4) {
+                const sX = randomRange(canvas.width * 0.1, canvas.width * 0.9);
+                const tX = randomRange(canvas.width * 0.1, canvas.width * 0.9);
+                const tY = randomRange(canvas.height * 0.1, canvas.height * 0.45);
+                rockets.push(new Rocket(sX, canvas.height, tX, tY));
+            }
+
+            // 3. Update Arrays
+            rockets = rockets.filter(r => r.update() && (r.draw() || true));
+            groundCrackers = groundCrackers.filter(gc => gc.update() && (gc.draw() || true));
+            particles = particles.filter(p => p.update() && (p.draw() || true));
+
+            requestAnimationFrame(step);
+        }
+
+        // --- POINTER EVENT CLICK DISPATCHER ---
+        window.addEventListener('pointerdown', (e) => {
+            // Ignore mouse actions if interacting with button UI cluster panels
+            if (e.clientY > canvas.height - 80 && e.clientX > canvas.width/2 - 200 && e.clientX < canvas.width/2 + 200) return;
+
+            if (currentMode === 'sky') {
+                const startX = canvas.width / 2 + randomRange(-120, 120);
+                rockets.push(new Rocket(startX, canvas.height, e.clientX, e.clientY));
+            } else if (currentMode === 'anar') {
+                groundCrackers.push(new AnarCracker(e.clientX, e.clientY));
+            } else if (currentMode === 'chakri') {
+                groundCrackers.push(new ChakriCracker(e.clientX, e.clientY));
+            }
+        });
+
+        // Fire-up Initialization sequence
+        resizeCanvas();
+        step();
+    </script>
+</body>
+</html>
